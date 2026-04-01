@@ -1,4 +1,5 @@
 require('dotenv').config();
+if (!process.env.JWT_SECRET) process.env.JWT_SECRET = 'dersmatik-super-secret-key-2024';
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
@@ -18,14 +19,21 @@ async function main() {
 
   const app = express();
   const server = http.createServer(app);
+  const allowedOrigins = [
+    process.env.CLIENT_URL,
+    'http://localhost:5173',
+    'http://37.148.214.241',
+    'http://37.148.214.241:3001',
+  ].filter(Boolean);
+
   const io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL || 'http://localhost:5173',
+      origin: allowedOrigins,
       methods: ['GET', 'POST']
     }
   });
 
-  app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
+  app.use(cors({ origin: allowedOrigins, credentials: true }));
   app.use(express.json({ limit: '10mb' }));
   app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
