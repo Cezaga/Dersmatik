@@ -4,57 +4,61 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const db = require('./db');
 
-const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/users');
-const questionRoutes = require('./routes/questions');
-const examRoutes = require('./routes/exams');
-const trialRoutes = require('./routes/trials');
-const flashcardRoutes = require('./routes/flashcards');
-const studyRoomRoutes = require('./routes/studyRooms');
-const socialRoutes = require('./routes/social');
-const statsRoutes = require('./routes/stats');
-const plannerRoutes = require('./routes/planner');
-const gamificationRoutes = require('./routes/gamification');
-const notebookRoutes = require('./routes/notebook');
-const setupSockets = require('./sockets');
+async function main() {
+  // Initialize database
+  await db.init();
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
-    methods: ['GET', 'POST']
-  }
-});
+  // Run migrations and seed
+  const migrate = require('./db/migrate');
+  migrate(db);
+  const seed = require('./db/seed');
+  seed(db);
 
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
-app.use(express.json({ limit: '10mb' }));
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+  const app = express();
+  const server = http.createServer(app);
+  const io = new Server(server, {
+    cors: {
+      origin: process.env.CLIENT_URL || 'http://localhost:5173',
+      methods: ['GET', 'POST']
+    }
+  });
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/questions', questionRoutes);
-app.use('/api/exams', examRoutes);
-app.use('/api/trials', trialRoutes);
-app.use('/api/flashcards', flashcardRoutes);
-app.use('/api/study-rooms', studyRoomRoutes);
-app.use('/api/social', socialRoutes);
-app.use('/api/stats', statsRoutes);
-app.use('/api/planner', plannerRoutes);
-app.use('/api/gamification', gamificationRoutes);
-app.use('/api/notebook', notebookRoutes);
+  app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
+  app.use(express.json({ limit: '10mb' }));
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Dersmatik API çalışıyor!' });
-});
+  // Routes
+  app.use('/api/auth', require('./routes/auth'));
+  app.use('/api/users', require('./routes/users'));
+  app.use('/api/questions', require('./routes/questions'));
+  app.use('/api/exams', require('./routes/exams'));
+  app.use('/api/trials', require('./routes/trials'));
+  app.use('/api/flashcards', require('./routes/flashcards'));
+  app.use('/api/study-rooms', require('./routes/studyRooms'));
+  app.use('/api/social', require('./routes/social'));
+  app.use('/api/stats', require('./routes/stats'));
+  app.use('/api/planner', require('./routes/planner'));
+  app.use('/api/gamification', require('./routes/gamification'));
+  app.use('/api/notebook', require('./routes/notebook'));
 
-// Socket.io
-setupSockets(io);
-app.set('io', io);
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', message: 'Dersmatik API çalışıyor!' });
+  });
 
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`Dersmatik API ${PORT} portunda çalışıyor`);
+  // Socket.io
+  const setupSockets = require('./sockets');
+  setupSockets(io);
+  app.set('io', io);
+
+  const PORT = process.env.PORT || 3001;
+  server.listen(PORT, () => {
+    console.log(`Dersmatik API ${PORT} portunda çalışıyor`);
+  });
+}
+
+main().catch(err => {
+  console.error('Başlatma hatası:', err);
+  process.exit(1);
 });
