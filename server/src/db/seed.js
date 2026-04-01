@@ -172,7 +172,7 @@ function seed(db) {
   // ===== HAZIR FLASHCARD DESTELERI =====
   const systemUserId = 'system-user';
   try {
-    db.exec(`INSERT OR IGNORE INTO users (id, username, email, password_hash, xp, level, streak) VALUES ('${systemUserId}', 'Dersmatik', 'system@dersmatik.com', 'nologin', 0, 0, 0)`);
+    db.exec(`INSERT OR IGNORE INTO users (id, username, email, password, display_name, xp, level, streak_days) VALUES ('${systemUserId}', 'Dersmatik', 'system@dersmatik.com', 'nologin', 'Dersmatik', 0, 1, 0)`);
   } catch(e) { /* user may already exist */ }
 
   const flashcardDecks = [
@@ -238,8 +238,8 @@ function seed(db) {
     },
   ];
 
-  const insertDeck = db.prepare('INSERT OR IGNORE INTO flashcard_decks (id, user_id, name, description, subject_id, is_public) VALUES (?, ?, ?, ?, ?, 1)');
-  const insertCard = db.prepare('INSERT OR IGNORE INTO flashcard_cards (id, deck_id, front, back, difficulty, next_review, interval_days, ease_factor) VALUES (?, ?, ?, ?, 0, datetime(\'now\'), 1, 2.5)');
+  const insertDeck = db.prepare('INSERT OR IGNORE INTO flashcard_decks (id, user_id, title, description, subject_id, is_public) VALUES (?, ?, ?, ?, ?, 1)');
+  const insertCard = db.prepare('INSERT OR IGNORE INTO flashcards (id, deck_id, front, back, difficulty, next_review, interval_days, ease_factor) VALUES (?, ?, ?, ?, 0, datetime(\'now\'), 1, 2.5)');
 
   for (const deck of flashcardDecks) {
     insertDeck.run(deck.id, systemUserId, deck.name, deck.description, deck.subjectId);
