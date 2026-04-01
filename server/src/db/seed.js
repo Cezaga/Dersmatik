@@ -7,11 +7,15 @@ function seed(db) {
     { id: 'tyt-mat', name: 'Temel Matematik', exam_type: 'TYT', category: 'Matematik', icon: '🔢', color: '#3B82F6' },
     { id: 'tyt-fen', name: 'Fen Bilimleri', exam_type: 'TYT', category: 'Fen', icon: '🔬', color: '#10B981' },
     { id: 'tyt-sosyal', name: 'Sosyal Bilimler', exam_type: 'TYT', category: 'Sosyal', icon: '🌍', color: '#F59E0B' },
+    { id: 'ayt-sosyal1', name: 'Sosyal Bilimler-1', exam_type: 'AYT', category: 'Sosyal', icon: '📜', color: '#F97316' },
+    { id: 'ayt-sosyal2', name: 'Sosyal Bilimler-2', exam_type: 'AYT', category: 'Sosyal', icon: '🤔', color: '#A855F7' },
     { id: 'ayt-mat', name: 'Matematik', exam_type: 'AYT', category: 'Matematik', icon: '📐', color: '#6366F1' },
+    { id: 'ayt-fen', name: 'Fen Bilimleri', exam_type: 'AYT', category: 'Fen', icon: '🔬', color: '#8B5CF6' },
+    // Alt dersler (konu çalışma ve analiz için - sınavda AYT Fen altında)
     { id: 'ayt-fizik', name: 'Fizik', exam_type: 'AYT', category: 'Fen', icon: '⚛️', color: '#8B5CF6' },
     { id: 'ayt-kimya', name: 'Kimya', exam_type: 'AYT', category: 'Fen', icon: '🧪', color: '#EC4899' },
     { id: 'ayt-biyoloji', name: 'Biyoloji', exam_type: 'AYT', category: 'Fen', icon: '🧬', color: '#14B8A6' },
-    { id: 'ayt-edebiyat', name: 'Türk Dili ve Edebiyatı', exam_type: 'AYT', category: 'Türkçe', icon: '✍️', color: '#F97316' },
+    { id: 'ayt-edebiyat', name: 'Türk Dili ve Edebiyatı', exam_type: 'AYT', category: 'Sosyal', icon: '✍️', color: '#F97316' },
     { id: 'ayt-tarih', name: 'Tarih', exam_type: 'AYT', category: 'Sosyal', icon: '🏛️', color: '#78716C' },
     { id: 'ayt-cografya', name: 'Coğrafya', exam_type: 'AYT', category: 'Sosyal', icon: '🗺️', color: '#22C55E' },
     { id: 'ayt-felsefe', name: 'Felsefe', exam_type: 'AYT', category: 'Sosyal', icon: '🤔', color: '#A855F7' },
@@ -36,6 +40,9 @@ function seed(db) {
     'ayt-tarih': ['İlk Çağ Uygarlıkları', 'İslam Medeniyeti', 'Türk-İslam Devletleri', 'Osmanlı Kuruluş ve Yükselme', 'Osmanlı Duraklama ve Gerileme', 'Osmanlı Son Dönem ve Islahatlar', 'I. Dünya Savaşı', 'Kurtuluş Savaşı', 'Atatürk Dönemi', 'II. Dünya Savaşı Sonrası', 'Soğuk Savaş', 'Yakın Tarih'],
     'ayt-cografya': ['Doğal Sistemler', 'Beşeri Sistemler', 'Küresel Ortam', 'Çevre ve Toplum', 'Türkiye Fiziki Coğrafyası', 'Türkiye Beşeri Coğrafyası', 'Bölgeler', 'Ülkeler Coğrafyası'],
     'ayt-felsefe': ['Bilgi Felsefesi', 'Varlık Felsefesi', 'Ahlak Felsefesi', 'Sanat Felsefesi', 'Din Felsefesi', 'Siyaset Felsefesi', 'Mantık', 'Bilim Felsefesi', 'Sosyoloji', 'Psikoloji'],
+    'ayt-sosyal1': ['Tarih-1 İlk Çağ', 'Tarih-1 Orta Çağ', 'Tarih-1 Osmanlı', 'Tarih-1 Yeni Çağ', 'Tarih-1 Yakın Çağ', 'Coğrafya-1 Doğal Sistemler', 'Coğrafya-1 Beşeri Sistemler', 'Coğrafya-1 Türkiye', 'Edebiyat Metin Türleri', 'Edebiyat Dönemler'],
+    'ayt-sosyal2': ['Felsefe', 'Mantık', 'Sosyoloji', 'Psikoloji', 'Din Kültürü', 'Tarih-2 Osmanlı Kültür', 'Tarih-2 Çağdaş Türk Tarihi', 'Coğrafya-2 Çevre ve Toplum', 'Coğrafya-2 Küresel Ortam', 'Coğrafya-2 Ülkeler'],
+    'ayt-fen': ['Fizik - Kuvvet ve Hareket', 'Fizik - Elektrik ve Manyetizma', 'Fizik - Dalgalar', 'Fizik - Modern Fizik', 'Kimya - Mol ve Hesaplamalar', 'Kimya - Gazlar ve Çözeltiler', 'Kimya - Denge ve Kinetik', 'Kimya - Organik Kimya', 'Biyoloji - Genetik', 'Biyoloji - Enerji Dönüşümü', 'Biyoloji - Bitki ve İnsan Fizyolojisi', 'Biyoloji - Ekoloji'],
   };
 
   const insertTopic = db.prepare('INSERT OR IGNORE INTO topics (id, subject_id, name, order_index) VALUES (?, ?, ?, ?)');
