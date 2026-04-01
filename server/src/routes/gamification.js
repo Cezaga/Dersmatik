@@ -147,4 +147,66 @@ router.get('/yks-countdown', auth, (req, res) => {
   res.json({ yksDate: yksDate.toISOString(), daysLeft: days, hoursLeft: hours });
 });
 
+// Manuel çalışma kaydı ekle
+router.post('/study-log', auth, (req, res) => {
+  try {
+    const { subjectId, durationMinutes, questionsSolved, activityType = 'manual' } = req.body;
+    const id = uuidv4();
+
+    db.prepare('INSERT INTO study_logs (id, user_id, subject_id, activity_type, duration_minutes, questions_solved, xp_earned) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(id, req.userId, subjectId || null, activityType, durationMinutes || 0, questionsSolved || 0, Math.round((durationMinutes || 0) / 5 + (questionsSolved || 0) * 2));
+
+    const xpGain = Math.round((durationMinutes || 0) / 5 + (questionsSolved || 0) * 2);
+    if (xpGain > 0) {
+      db.prepare('UPDATE users SET xp = xp + ?, total_xp = total_xp + ? WHERE id = ?').run(xpGain, xpGain, req.userId);
+    }
+
+    // Streak güncelle
+    const today = new Date().toISOString().split('T')[0];
+    const user = db.prepare('SELECT last_study_date, streak_days FROM users WHERE id = ?').get(req.userId);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    if (user.last_study_date === yesterday) {
+      db.prepare('UPDATE users SET streak_days = streak_days + 1, last_study_date = ? WHERE id = ?').run(today, req.userId);
+    } else if (user.last_study_date !== today) {
+      db.prepare('UPDATE users SET streak_days = 1, last_study_date = ? WHERE id = ?').run(today, req.userId);
+    }
+
+    res.status(201).json({ id, xpGained: xpGain, message: 'Çalışma kaydedildi!' });
+  } catch (err) {
+    res.status(500).json({ error: 'Hata oluştu' });
+  }
+});
+
+// Haftalık rapor
+router.get('/weekly-report', auth, (req, res) => {
+  try {
+    const studyTime = db.prepare("SELECT COALESCE(SUM(duration_minutes), 0) as total FROM study_logs WHERE user_id = ? AND created_at >= datetime('now', '-7 days')").get(req.userId);
+    const questions = db.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct FROM user_answers WHERE user_id = ? AND created_at >= datetime('now', '-7 days')").get(req.userId);
+    const pomodoros = db.prepare("SELECT COUNT(*) as total FROM pomodoro_sessions WHERE user_id = ? AND completed = 1 AND completed_at >= datetime('now', '-7 days')").get(req.userId);
+    const xpGained = db.prepare("SELECT COALESCE(SUM(xp_earned), 0) as total FROM study_logs WHERE user_id = ? AND created_at >= datetime('now', '-7 days')").get(req.userId);
+    const prevWeekStudy = db.prepare("SELECT COALESCE(SUM(duration_minutes), 0) as total FROM study_logs WHERE user_id = ? AND created_at >= datetime('now', '-14 days') AND created_at < datetime('now', '-7 days')").get(req.userId);
+    const dailyBreakdown = db.prepare("SELECT date(created_at) as date, SUM(duration_minutes) as minutes, SUM(questions_solved) as questions FROM study_logs WHERE user_id = ? AND created_at >= datetime('now', '-7 days') GROUP BY date(created_at) ORDER BY date ASC").all(req.userId);
+
+    const user = db.prepare('SELECT streak_days, level, xp, total_xp FROM users WHERE id = ?').get(req.userId);
+
+    res.json({
+      studyMinutes: studyTime.total,
+      totalQuestions: questions.total,
+      correctQuestions: questions.correct,
+      accuracy: questions.total > 0 ? Math.round(questions.correct / questions.total * 100) : 0,
+      pomodoros: pomodoros.total,
+      xpGained: xpGained.total,
+      prevWeekMinutes: prevWeekStudy.total,
+      changePercent: prevWeekStudy.total > 0 ? Math.round((studyTime.total - prevWeekStudy.total) / prevWeekStudy.total * 100) : 0,
+      dailyBreakdown,
+      streak: user.streak_days,
+      level: user.level,
+      xp: user.xp,
+      totalXp: user.total_xp
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Hata oluştu' });
+  }
+});
+
 module.exports = router;

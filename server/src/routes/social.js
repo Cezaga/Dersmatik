@@ -87,13 +87,32 @@ router.get('/leaderboard', auth, (req, res) => {
 
     let query;
     if (type === 'xp') {
-      query = `SELECT id, username, display_name, avatar, level, total_xp, streak_days FROM users WHERE id IN (${placeholders}) ORDER BY total_xp DESC`;
+      if (period === 'weekly') {
+        query = `SELECT u.id, u.username, u.display_name, u.avatar, u.level,
+          COALESCE(SUM(sl.xp_earned), 0) as total_xp, u.streak_days
+          FROM users u LEFT JOIN study_logs sl ON u.id = sl.user_id AND sl.created_at >= datetime('now', '-7 days')
+          WHERE u.id IN (${placeholders}) GROUP BY u.id ORDER BY total_xp DESC`;
+      } else {
+        query = `SELECT id, username, display_name, avatar, level, total_xp, streak_days FROM users WHERE id IN (${placeholders}) ORDER BY total_xp DESC`;
+      }
     } else if (type === 'questions') {
-      query = `SELECT u.id, u.username, u.display_name, u.avatar, u.level, COUNT(ua.id) as question_count
-        FROM users u LEFT JOIN user_answers ua ON u.id = ua.user_id WHERE u.id IN (${placeholders}) GROUP BY u.id ORDER BY question_count DESC`;
+      if (period === 'weekly') {
+        query = `SELECT u.id, u.username, u.display_name, u.avatar, u.level, COUNT(ua.id) as question_count
+          FROM users u LEFT JOIN user_answers ua ON u.id = ua.user_id AND ua.created_at >= datetime('now', '-7 days')
+          WHERE u.id IN (${placeholders}) GROUP BY u.id ORDER BY question_count DESC`;
+      } else {
+        query = `SELECT u.id, u.username, u.display_name, u.avatar, u.level, COUNT(ua.id) as question_count
+          FROM users u LEFT JOIN user_answers ua ON u.id = ua.user_id WHERE u.id IN (${placeholders}) GROUP BY u.id ORDER BY question_count DESC`;
+      }
     } else {
-      query = `SELECT u.id, u.username, u.display_name, u.avatar, u.level, COALESCE(SUM(sl.duration_minutes), 0) as study_minutes
-        FROM users u LEFT JOIN study_logs sl ON u.id = sl.user_id WHERE u.id IN (${placeholders}) GROUP BY u.id ORDER BY study_minutes DESC`;
+      if (period === 'weekly') {
+        query = `SELECT u.id, u.username, u.display_name, u.avatar, u.level, COALESCE(SUM(sl.duration_minutes), 0) as study_minutes
+          FROM users u LEFT JOIN study_logs sl ON u.id = sl.user_id AND sl.created_at >= datetime('now', '-7 days')
+          WHERE u.id IN (${placeholders}) GROUP BY u.id ORDER BY study_minutes DESC`;
+      } else {
+        query = `SELECT u.id, u.username, u.display_name, u.avatar, u.level, COALESCE(SUM(sl.duration_minutes), 0) as study_minutes
+          FROM users u LEFT JOIN study_logs sl ON u.id = sl.user_id WHERE u.id IN (${placeholders}) GROUP BY u.id ORDER BY study_minutes DESC`;
+      }
     }
 
     const leaderboard = db.prepare(query).all(...friendIds);
@@ -152,6 +171,36 @@ router.post('/time-capsules', auth, (req, res) => {
     db.prepare('INSERT INTO time_capsules (id, user_id, message, open_date, from_friend_id) VALUES (?, ?, ?, ?, ?)')
       .run(id, friendId || req.userId, message, openDate, friendId ? req.userId : null);
     res.status(201).json({ id, message: 'Zaman kapsülü oluşturuldu' });
+  } catch (err) {
+    res.status(500).json({ error: 'Hata oluştu' });
+  }
+});
+
+// Bahisleri listele
+router.get('/bets', auth, (req, res) => {
+  try {
+    const bets = db.prepare('SELECT * FROM xp_bets WHERE challenger_id = ? OR opponent_id = ? ORDER BY created_at DESC').all(req.userId, req.userId);
+    res.json(bets);
+  } catch (err) {
+    res.status(500).json({ error: 'Hata oluştu' });
+  }
+});
+
+// Sözleşmeleri listele
+router.get('/contracts', auth, (req, res) => {
+  try {
+    const contracts = db.prepare('SELECT * FROM study_contracts WHERE user_id = ? ORDER BY created_at DESC').all(req.userId);
+    res.json(contracts);
+  } catch (err) {
+    res.status(500).json({ error: 'Hata oluştu' });
+  }
+});
+
+// Zaman kapsüllerini listele
+router.get('/time-capsules', auth, (req, res) => {
+  try {
+    const capsules = db.prepare('SELECT * FROM time_capsules WHERE user_id = ? ORDER BY open_date ASC').all(req.userId);
+    res.json(capsules);
   } catch (err) {
     res.status(500).json({ error: 'Hata oluştu' });
   }

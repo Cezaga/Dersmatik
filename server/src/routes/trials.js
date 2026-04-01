@@ -81,4 +81,43 @@ router.get('/progress', auth, (req, res) => {
   }
 });
 
+// Sıralama tahmini
+router.get('/estimate-rank', auth, (req, res) => {
+  try {
+    const { tytNet, aytNet } = req.query;
+    // Basitleştirilmiş sıralama tahmini (gerçek YKS verileriyle kalibre edilebilir)
+    const tyt = parseFloat(tytNet) || 0;
+    const ayt = parseFloat(aytNet) || 0;
+    const totalScore = tyt * 1.32 + ayt * 1.5; // Ağırlıklı ham puan tahmini
+
+    let rank;
+    if (totalScore >= 400) rank = Math.round(100 + (500 - totalScore) * 20);
+    else if (totalScore >= 350) rank = Math.round(2000 + (400 - totalScore) * 100);
+    else if (totalScore >= 300) rank = Math.round(7000 + (350 - totalScore) * 200);
+    else if (totalScore >= 250) rank = Math.round(17000 + (300 - totalScore) * 500);
+    else if (totalScore >= 200) rank = Math.round(42000 + (250 - totalScore) * 1000);
+    else if (totalScore >= 150) rank = Math.round(92000 + (200 - totalScore) * 2000);
+    else if (totalScore >= 100) rank = Math.round(192000 + (150 - totalScore) * 5000);
+    else rank = Math.round(442000 + (100 - totalScore) * 10000);
+
+    rank = Math.max(1, Math.min(rank, 3000000));
+
+    res.json({ tytNet: tyt, aytNet: ayt, totalScore: totalScore.toFixed(1), estimatedRank: rank });
+  } catch (err) {
+    res.status(500).json({ error: 'Hata oluştu' });
+  }
+});
+
+// Deneme sonucu sil
+router.delete('/:id', auth, (req, res) => {
+  try {
+    const result = db.prepare('SELECT * FROM trial_results WHERE id = ? AND user_id = ?').get(req.params.id, req.userId);
+    if (!result) return res.status(404).json({ error: 'Sonuç bulunamadı' });
+    db.prepare('DELETE FROM trial_results WHERE id = ? AND user_id = ?').run(req.params.id, req.userId);
+    res.json({ message: 'Silindi' });
+  } catch (err) {
+    res.status(500).json({ error: 'Hata oluştu' });
+  }
+});
+
 module.exports = router;

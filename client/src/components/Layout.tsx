@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
-import { Home, Clock, BookOpen, BarChart3, Users, User, ClipboardList, NotebookPen, Calculator, ChevronLeft } from 'lucide-react';
+import { Home, Clock, BookOpen, BarChart3, Users, User, ClipboardList, NotebookPen, Calculator, Swords, TreePine, MessageCircle, Sparkles, Brain } from 'lucide-react';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Ana Sayfa' },
@@ -10,8 +10,13 @@ const navItems = [
 ];
 
 const sideItems = [
+  { to: '/ai-tutor', icon: Sparkles, label: 'AI Asistan' },
+  { to: '/study-rooms', icon: MessageCircle, label: 'Çalışma Odaları' },
   { to: '/trials', icon: ClipboardList, label: 'Denemeler' },
   { to: '/flashcards', icon: NotebookPen, label: 'Flashcard' },
+  { to: '/skill-tree', icon: TreePine, label: 'Çalışma Haritası' },
+  { to: '/bets', icon: Swords, label: 'Bahis & Sözleşme' },
+  { to: '/brain-games', icon: Brain, label: 'Beyin Jimnastiği' },
   { to: '/planner', icon: ClipboardList, label: 'Planlama' },
   { to: '/formulas', icon: Calculator, label: 'Formüller' },
   { to: '/notebook', icon: NotebookPen, label: 'Defterim' },
@@ -38,7 +43,7 @@ export default function Layout() {
           <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-purple-400 bg-clip-text text-transparent">
             Dersmatik
           </h1>
-          <p className="text-xs text-dark-400 mt-1">YKS Calısma Arkadaşın</p>
+          <p className="text-xs text-dark-400 mt-1">YKS Çalışma Arkadaşın</p>
         </div>
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {[...navItems, ...sideItems].map(({ to, icon: Icon, label }) => (
@@ -47,15 +52,15 @@ export default function Layout() {
               to={to}
               end={to === '/'}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                `flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   isActive
                     ? 'bg-primary-600/20 text-primary-400 border border-primary-500/30'
                     : 'text-dark-300 hover:bg-dark-700 hover:text-white'
                 }`
               }
             >
-              <Icon size={20} />
-              {label}
+              <Icon size={18} />
+              <span className="truncate">{label}</span>
             </NavLink>
           ))}
         </nav>

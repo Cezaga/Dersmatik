@@ -47,6 +47,18 @@ async function main() {
     res.json({ status: 'ok', message: 'Dersmatik API çalışıyor!' });
   });
 
+  // Static frontend serve (production)
+  const publicPath = path.join(__dirname, '../public');
+  const fs = require('fs');
+  if (fs.existsSync(publicPath)) {
+    app.use(express.static(publicPath));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return next();
+      res.sendFile(path.join(publicPath, 'index.html'));
+    });
+    console.log('Frontend static dosyalar serve ediliyor');
+  }
+
   // Socket.io
   const setupSockets = require('./sockets');
   setupSockets(io);

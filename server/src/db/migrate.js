@@ -345,6 +345,7 @@ function migrate(db) {
     `CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_flashcards_deck ON flashcards(deck_id)`,
     `CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read)`,
+    `ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''`,
   ];
 
   for (const sql of statements) {

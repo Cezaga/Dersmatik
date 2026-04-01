@@ -15,6 +15,11 @@ import PlannerPage from './pages/PlannerPage';
 import ProfilePage from './pages/ProfilePage';
 import FormulaPage from './pages/FormulaPage';
 import NotebookPage from './pages/NotebookPage';
+import StudyRoomsPage from './pages/StudyRoomsPage';
+import SkillTreePage from './pages/SkillTreePage';
+import BetsPage from './pages/BetsPage';
+import AITutorPage from './pages/AITutorPage';
+import BrainGamesPage from './pages/BrainGamesPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -40,6 +45,11 @@ export default function App() {
         <Route path="profile" element={<ProfilePage />} />
         <Route path="formulas" element={<FormulaPage />} />
         <Route path="notebook" element={<NotebookPage />} />
+        <Route path="study-rooms" element={<StudyRoomsPage />} />
+        <Route path="skill-tree" element={<SkillTreePage />} />
+        <Route path="bets" element={<BetsPage />} />
+        <Route path="ai-tutor" element={<AITutorPage />} />
+        <Route path="brain-games" element={<BrainGamesPage />} />
       </Route>
     </Routes>
   );

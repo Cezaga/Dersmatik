@@ -7,14 +7,14 @@ const router = express.Router();
 // Profil güncelle
 router.put('/profile', auth, (req, res) => {
   try {
-    const { displayName, avatar, targetRank, targetDepartment, dailyGoalMinutes, dailyGoalQuestions } = req.body;
+    const { displayName, avatar, bio, targetRank, targetDepartment, dailyGoalMinutes, dailyGoalQuestions } = req.body;
     db.prepare(`UPDATE users SET display_name = COALESCE(?, display_name), avatar = COALESCE(?, avatar),
-      target_rank = COALESCE(?, target_rank), target_department = COALESCE(?, target_department),
+      bio = COALESCE(?, bio), target_rank = COALESCE(?, target_rank), target_department = COALESCE(?, target_department),
       daily_goal_minutes = COALESCE(?, daily_goal_minutes), daily_goal_questions = COALESCE(?, daily_goal_questions),
       updated_at = datetime('now') WHERE id = ?`)
-      .run(displayName, avatar, targetRank, targetDepartment, dailyGoalMinutes, dailyGoalQuestions, req.userId);
+      .run(displayName, avatar, bio, targetRank, targetDepartment, dailyGoalMinutes, dailyGoalQuestions, req.userId);
 
-    const user = db.prepare('SELECT id, username, email, display_name, avatar, level, xp, total_xp, streak_days, target_rank, target_department, daily_goal_minutes, daily_goal_questions FROM users WHERE id = ?').get(req.userId);
+    const user = db.prepare('SELECT id, username, email, display_name, avatar, bio, level, xp, total_xp, streak_days, target_rank, target_department, daily_goal_minutes, daily_goal_questions FROM users WHERE id = ?').get(req.userId);
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: 'Profil güncellenirken hata oluştu' });
@@ -37,13 +37,16 @@ router.get('/search', auth, (req, res) => {
 // Kullanıcı profili
 router.get('/:id', auth, (req, res) => {
   try {
-    const user = db.prepare('SELECT id, username, display_name, avatar, level, xp, total_xp, streak_days, created_at FROM users WHERE id = ?').get(req.params.id);
+    const user = db.prepare('SELECT id, username, display_name, avatar, bio, level, xp, total_xp, streak_days, created_at FROM users WHERE id = ?').get(req.params.id);
     if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
 
-    const stats = db.prepare(`SELECT COUNT(*) as total_questions, SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct_answers FROM user_answers WHERE user_id = ?`).get(req.params.id);
-    const studyTime = db.prepare(`SELECT COALESCE(SUM(duration_minutes), 0) as total_minutes FROM study_logs WHERE user_id = ?`).get(req.params.id);
+    const stats = db.prepare('SELECT COUNT(*) as total_questions, SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct_answers FROM user_answers WHERE user_id = ?').get(req.params.id);
+    const studyTime = db.prepare('SELECT COALESCE(SUM(duration_minutes), 0) as total_minutes FROM study_logs WHERE user_id = ?').get(req.params.id);
+    const todayStudy = db.prepare("SELECT COALESCE(SUM(duration_minutes), 0) as minutes FROM study_logs WHERE user_id = ? AND date(created_at) = date('now')").get(req.params.id);
+    const recentTrials = db.prepare('SELECT trial_name, exam_type, total_net, exam_date FROM trial_results WHERE user_id = ? ORDER BY created_at DESC LIMIT 5').all(req.params.id);
+    const badges = db.prepare('SELECT b.name, b.icon, b.description FROM user_badges ub JOIN badges b ON ub.badge_id = b.id WHERE ub.user_id = ?').all(req.params.id);
 
-    res.json({ ...user, stats: { ...stats, total_study_minutes: studyTime.total_minutes } });
+    res.json({ ...user, stats: { ...stats, total_study_minutes: studyTime.total_minutes, today_study_minutes: todayStudy.minutes }, recentTrials, badges });
   } catch (err) {
     res.status(500).json({ error: 'Hata oluştu' });
   }

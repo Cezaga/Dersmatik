@@ -26,13 +26,22 @@ export default function NotebookPage() {
     api.get<ErrorEntry[]>('/stats/errors').then(setErrors).catch(() => {});
   }, []);
 
+  const [msg, setMsg] = useState('');
+
   const createNote = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.post('/notebook/notes', newNote);
-    const updated = await api.get<Note[]>('/notebook/notes');
-    setNotes(updated);
-    setShowNewNote(false);
-    setNewNote({ title: '', content: '', isPublic: false });
+    try {
+      await api.post('/notebook/notes', newNote);
+      const updated = await api.get<Note[]>('/notebook/notes');
+      setNotes(updated);
+      setShowNewNote(false);
+      setNewNote({ title: '', content: '', isPublic: false });
+      setMsg('Not kaydedildi! +10 XP');
+      setTimeout(() => setMsg(''), 3000);
+    } catch {
+      setMsg('Not kaydedilirken hata oluştu.');
+      setTimeout(() => setMsg(''), 3000);
+    }
   };
 
   return (

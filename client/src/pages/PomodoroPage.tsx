@@ -10,11 +10,185 @@ const PRESETS = [
 
 const AMBIENT_SOUNDS = [
   { id: 'none', label: 'Sessiz', emoji: '🔇' },
-  { id: 'rain', label: 'Yagmur', emoji: '🌧️' },
+  { id: 'rain', label: 'Yağmur', emoji: '🌧️' },
   { id: 'forest', label: 'Orman', emoji: '🌲' },
   { id: 'cafe', label: 'Kafe', emoji: '☕' },
-  { id: 'fire', label: 'Şomine', emoji: '🔥' },
+  { id: 'fire', label: 'Şömine', emoji: '🔥' },
+  { id: 'whitenoise', label: 'Beyaz Gürültü', emoji: '📻' },
 ];
+
+// Generate ambient sounds using Web Audio API
+class AmbientSoundGenerator {
+  private audioContext: AudioContext | null = null;
+  private nodes: AudioNode[] = [];
+  private isPlaying = false;
+
+  start(soundType: string) {
+    this.stop();
+    if (soundType === 'none') return;
+
+    this.audioContext = new AudioContext();
+    this.isPlaying = true;
+
+    switch (soundType) {
+      case 'rain': this.createRain(); break;
+      case 'forest': this.createForest(); break;
+      case 'cafe': this.createCafe(); break;
+      case 'fire': this.createFire(); break;
+      case 'whitenoise': this.createWhiteNoise(); break;
+    }
+  }
+
+  stop() {
+    this.isPlaying = false;
+    this.nodes.forEach(n => { try { (n as any).stop?.(); (n as any).disconnect?.(); } catch {} });
+    this.nodes = [];
+    if (this.audioContext) {
+      try { this.audioContext.close(); } catch {}
+      this.audioContext = null;
+    }
+  }
+
+  private createNoiseBuffer(duration: number): AudioBuffer {
+    const ctx = this.audioContext!;
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * duration, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1);
+    }
+    return buffer;
+  }
+
+  private createWhiteNoise() {
+    const ctx = this.audioContext!;
+    const buffer = this.createNoiseBuffer(2);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+
+    const gain = ctx.createGain();
+    gain.gain.value = 0.05;
+
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    source.start();
+    this.nodes.push(source, gain);
+  }
+
+  private createRain() {
+    const ctx = this.audioContext!;
+    const buffer = this.createNoiseBuffer(2);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+
+    // Low-pass filter for rain-like sound
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 4000;
+
+    const gain = ctx.createGain();
+    gain.gain.value = 0.08;
+
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    source.start();
+    this.nodes.push(source, filter, gain);
+  }
+
+  private createForest() {
+    const ctx = this.audioContext!;
+    // Wind-like base
+    const buffer = this.createNoiseBuffer(3);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 800;
+    filter.Q.value = 0.5;
+
+    const gain = ctx.createGain();
+    gain.gain.value = 0.04;
+
+    // Modulate the gain for wind gusts
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.2;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 0.02;
+    lfo.connect(lfoGain);
+    lfoGain.connect(gain.gain);
+    lfo.start();
+
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    source.start();
+    this.nodes.push(source, filter, gain, lfo, lfoGain);
+  }
+
+  private createCafe() {
+    const ctx = this.audioContext!;
+    // Brownish noise for cafe ambience
+    const buffer = this.createNoiseBuffer(2);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 2000;
+
+    const filter2 = ctx.createBiquadFilter();
+    filter2.type = 'highpass';
+    filter2.frequency.value = 200;
+
+    const gain = ctx.createGain();
+    gain.gain.value = 0.06;
+
+    source.connect(filter);
+    filter.connect(filter2);
+    filter2.connect(gain);
+    gain.connect(ctx.destination);
+    source.start();
+    this.nodes.push(source, filter, filter2, gain);
+  }
+
+  private createFire() {
+    const ctx = this.audioContext!;
+    const buffer = this.createNoiseBuffer(2);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+
+    // Crackling fire effect
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 1500;
+    filter.Q.value = 2;
+
+    const gain = ctx.createGain();
+    gain.gain.value = 0.07;
+
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 3;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 0.04;
+    lfo.connect(lfoGain);
+    lfoGain.connect(gain.gain);
+    lfo.start();
+
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    source.start();
+    this.nodes.push(source, filter, gain, lfo, lfoGain);
+  }
+}
+
+const soundGen = new AmbientSoundGenerator();
 
 export default function PomodoroPage() {
   const [preset, setPreset] = useState(PRESETS[0]);
@@ -43,6 +217,16 @@ export default function PomodoroPage() {
     resetTimer();
   }, [preset, resetTimer]);
 
+  // Handle ambient sound changes
+  useEffect(() => {
+    if (sound === 'none') {
+      soundGen.stop();
+    } else {
+      soundGen.start(sound);
+    }
+    return () => { soundGen.stop(); };
+  }, [sound]);
+
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
       intervalRef.current = setInterval(() => setTimeLeft(t => t - 1), 1000);
@@ -63,7 +247,7 @@ export default function PomodoroPage() {
 
       // Notification
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(nextIsWork ? 'Mola bitti! Calısmaya devam!' : 'Tebrikler! Mola zamanı!');
+        new Notification(nextIsWork ? 'Mola bitti! Çalışmaya devam!' : 'Tebrikler! Mola zamanı!');
       }
     }
   }, [isRunning, timeLeft]);
@@ -112,7 +296,7 @@ export default function PomodoroPage() {
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <div className="flex items-center gap-2 text-sm text-dark-400 mb-2">
               {isWork ? <Brain size={16} /> : <Coffee size={16} />}
-              {isWork ? 'Calısma' : 'Mola'}
+              {isWork ? 'Çalışma' : 'Mola'}
             </div>
             <div className="text-5xl font-bold tabular-nums">
               {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
@@ -138,8 +322,8 @@ export default function PomodoroPage() {
       {/* Ambient Sounds */}
       <div className="bg-dark-800 rounded-2xl p-4 border border-dark-700">
         <div className="flex items-center gap-2 text-sm text-dark-300 mb-3">
-          {sound === 'none' ? <VolumeX size={16} /> : <Volume2 size={16} />}
-          Ortam Sesleri
+          {sound === 'none' ? <VolumeX size={16} /> : <Volume2 size={16} className="text-primary-400" />}
+          Ortam Sesleri {sound !== 'none' && <span className="text-xs text-primary-400">(Çalıyor)</span>}
         </div>
         <div className="flex gap-2 flex-wrap">
           {AMBIENT_SOUNDS.map(s => (
