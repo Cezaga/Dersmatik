@@ -5,23 +5,23 @@
 const fs = require('fs');
 const path = require('path');
 
-// TYT section config: subject_id, question range
+// TYT sections in order (global question numbering)
 const TYT_SECTIONS = [
-  { name: 'Türkçe', subjectId: 'tyt-turkce', start: 1, end: 40 },
-  { name: 'Sosyal Bilimler', subjectId: 'tyt-sosyal', start: 41, end: 65 },  // 25 soru (2020+ 20 soru olabilir)
-  { name: 'Temel Matematik', subjectId: 'tyt-mat', start: 61, end: 100 },
-  { name: 'Fen Bilimleri', subjectId: 'tyt-fen', start: 101, end: 120 },
+  { name: 'turkce', subjectId: 'tyt-turkce', count: 40 },
+  { name: 'sosyal', subjectId: 'tyt-sosyal', count: 25 },
+  { name: 'matematik', subjectId: 'tyt-mat', count: 40 },
+  { name: 'fen', subjectId: 'tyt-fen', count: 20 },
 ];
 
-// AYT section config
+// AYT sections in order
 const AYT_SECTIONS = [
-  { name: 'Sosyal Bilimler-1', subjectId: 'ayt-sosyal1', start: 1, end: 40 },
-  { name: 'Sosyal Bilimler-2', subjectId: 'ayt-sosyal2', start: 41, end: 80 },
-  { name: 'Matematik', subjectId: 'ayt-mat', start: 81, end: 120 },
-  { name: 'Fen Bilimleri', subjectId: 'ayt-fen', start: 121, end: 160 },
+  { name: 'sosyal1', subjectId: 'ayt-sosyal1', count: 40 },
+  { name: 'sosyal2', subjectId: 'ayt-sosyal2', count: 46 },
+  { name: 'matematik', subjectId: 'ayt-mat', count: 40 },
+  { name: 'fen', subjectId: 'ayt-fen', count: 40 },
 ];
 
-// File mapping: filename -> { year, type }
+// File mapping
 const FILE_MAP = {
   'TYT_01072018.txt': { year: 2018, type: 'TYT' },
   'tyt_yks_2019_web.txt': { year: 2019, type: 'TYT' },
@@ -42,213 +42,306 @@ const FILE_MAP = {
 };
 
 /**
- * Extract answer key from file content
- * Handles two formats:
- * 1. Clean: single letter per line (A\nB\nC...)
- * 2. Compressed: "1.B1.D1.A1.E2.A2.E..." format
+ * Normalize file content: handle encoding issues and CR/LF
  */
-function extractAnswerKey(content, expectedCount) {
+function normalizeContent(buffer) {
+  // Try UTF-8 first, fallback to latin-1
+  let text = buffer.toString('utf-8');
+
+  // Normalize Turkish chars that might be mangled
+  // Replace common latin-1 misinterpretations
+  text = text
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');  // Remaining \r to \n
+
+  return text;
+}
+
+/**
+ * Check if a line is a section header, return section key or null
+ */
+function detectSectionHeader(line) {
+  const t = line.trim().toUpperCase();
+
+  // Skip lines that are instructions like "TESTINE GECINIZ" or "TESTI BITTI"
+  if (/GE[CÇ].?[İI]N[İI]Z/i.test(t)) return null;
+  if (/B[İI]TT[İI]/i.test(t)) return null;
+  if (/CEVAPLARINIZI/i.test(t)) return null;
+  if (/CEVAP K/i.test(t)) return null;
+  if (/^\d+\.\s/.test(t)) return null;  // Numbered instruction lines
+
+  // TYT sections - handle encoding issues by matching partial ASCII
+  if (/T.?RK.?E\s*TEST/i.test(t)) return 'turkce';
+  if (/SOSYAL\s*B.?L.?MLER\s*TEST/i.test(t) && !/-1|-2|SOSYAL\s*B.*1|SOSYAL\s*B.*2/.test(t)) return 'sosyal';
+
+  // AYT sections
+  if (/T.?RK\s*D.?L.?.*SOSYAL.*1/i.test(t) || /SOSYAL\s*B.?L.?MLER.?1/i.test(t)) return 'sosyal1';
+  if (/SOSYAL\s*B.?L.?MLER.?2/i.test(t)) return 'sosyal2';
+  if (/MATEMAT.?K\s*TEST/i.test(t) && !/TEMEL/i.test(t)) return 'matematik';
+  if (/TEMEL\s*MATEMAT.?K\s*TEST/i.test(t)) return 'matematik';  // TYT mat
+  if (/FEN\s*B.?L.?MLER.?\s*TEST/i.test(t)) return 'fen';
+
+  return null;
+}
+
+/**
+ * Extract answers from file content.
+ * Returns array of { subjectId, answers: [letter, ...] }
+ */
+function extractAnswers(content, examType) {
   const lines = content.split('\n');
 
-  // Try format 1: single letters at end of file
-  const singleLetters = [];
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const trimmed = lines[i].trim();
-    if (/^[A-E]$/.test(trimmed)) {
-      singleLetters.unshift(trimmed);
-    } else if (singleLetters.length > 0 && trimmed.length > 0 && !/^\d+\.$/.test(trimmed) && !/^(Ö|SY|M)$/.test(trimmed)) {
-      // Hit non-answer content, check if we have enough
-      if (singleLetters.length >= expectedCount * 0.8) break;
-      // Reset if not enough - might be in a different section
-      if (singleLetters.length < 10) {
-        singleLetters.length = 0;
-      } else {
-        break;
-      }
+  // Find the answer key section: look for the last cluster of section headers
+  const headerPositions = [];
+  for (let i = 0; i < lines.length; i++) {
+    const section = detectSectionHeader(lines[i]);
+    if (section) {
+      headerPositions.push({ line: i, section, text: lines[i].trim() });
     }
   }
 
-  if (singleLetters.length >= expectedCount * 0.8) {
-    return singleLetters;
+  if (headerPositions.length === 0) {
+    console.log('    No section headers found');
+    return [];
   }
 
-  // Try format 2: compressed "1.B2.A3.E..." at end of file
-  // Look in last 500 chars
-  const tail = content.slice(-3000);
-  // Match patterns like "1.B" or "1.  B" or "1.B1.D"
-  const compressed = tail.match(/\d+\.\s*[A-E]/g);
-  if (compressed && compressed.length >= expectedCount * 0.8) {
-    // Parse into ordered answers
-    const answerMap = {};
-    for (const match of compressed) {
-      const m = match.match(/(\d+)\.\s*([A-E])/);
-      if (m) {
-        const num = parseInt(m[1]);
-        answerMap[num] = m[2];
+  // Find last cluster of headers (within ~150 lines of each other, answers between them)
+  let clusterStart = headerPositions.length - 1;
+  for (let i = headerPositions.length - 2; i >= 0; i--) {
+    if (headerPositions[clusterStart].line - headerPositions[i].line < 350) {
+      clusterStart = i;
+    } else {
+      break;
+    }
+  }
+
+  const answerHeaders = headerPositions.slice(clusterStart);
+  const answerStartLine = answerHeaders[0].line;
+
+  // Get the content after the answer section start
+  const answerContent = lines.slice(answerStartLine).join('\n');
+
+  // Check for compressed format (TYT 2024+): "1.B" patterns mixed together
+  // Detect: if we find "N.X" without a clear section structure between headers
+  const compressedMatches = answerContent.match(/\d+\.\s*\n*[A-E]/g);
+  const singleLetterMatches = answerContent.match(/^[A-E]$/gm);
+
+  // If we have both section headers with answers between them, use sectioned parsing
+  // If answers are all in one block after headers, use compressed parsing
+  const hasAnswersBetweenHeaders = answerHeaders.length >= 2 &&
+    checkAnswersBetweenHeaders(lines, answerHeaders);
+
+  if (hasAnswersBetweenHeaders) {
+    return parseSectionedAnswers(lines, answerHeaders, examType);
+  }
+
+  // Detect compressed format: "N." followed by letter (with optional newline between)
+  // In compressed format, there are many "N.\n[letter]" patterns (number on its own line)
+  const numberedPatterns = answerContent.match(/^\d+\.$/gm);
+  const hasCompressedFormat = numberedPatterns && numberedPatterns.length > 30;
+
+  if (hasCompressedFormat) {
+    return parseCompressedAnswers(answerContent, examType);
+  }
+
+  // Flat single-letter format (older files with section headers then letters)
+  if (singleLetterMatches && singleLetterMatches.length > 50) {
+    return parseFlatAnswers(lines, answerHeaders, examType);
+  }
+
+  // Try compressed as fallback
+  return parseCompressedAnswers(answerContent, examType);
+}
+
+/**
+ * Check if there are actual answers between section headers
+ */
+function checkAnswersBetweenHeaders(lines, headers) {
+  if (headers.length < 2) return false;
+
+  for (let h = 0; h < headers.length - 1; h++) {
+    const start = headers[h].line + 1;
+    const end = headers[h + 1].line;
+    let answerCount = 0;
+
+    for (let i = start; i < end && i < lines.length; i++) {
+      const t = lines[i].trim();
+      if (/^[A-E]$/.test(t) || /^\d+\.\s+[A-E]\s*$/.test(t)) {
+        answerCount++;
       }
     }
-    // Build ordered array
+
+    if (answerCount >= 5) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Parse answers from sectioned format: headers with answers between/after them
+ */
+function parseSectionedAnswers(lines, headers, examType) {
+  const sections = examType === 'TYT' ? TYT_SECTIONS : AYT_SECTIONS;
+  const results = [];
+
+  for (let h = 0; h < headers.length; h++) {
+    const start = headers[h].line + 1;
+    const end = h < headers.length - 1 ? headers[h + 1].line : lines.length;
+    const sectionKey = headers[h].section;
+
     const answers = [];
-    for (let i = 1; i <= expectedCount; i++) {
-      answers.push(answerMap[i] || null);
+    for (let i = start; i < end; i++) {
+      const t = lines[i].trim();
+      // "N.  X" format
+      const numbered = t.match(/^\d+\.\s+([A-E])\s*$/);
+      if (numbered) { answers.push(numbered[1]); continue; }
+      // Single letter
+      if (/^[A-E]$/.test(t)) { answers.push(t); continue; }
     }
-    return answers;
+
+    if (answers.length > 0) {
+      const section = sections.find(s => s.name === sectionKey);
+      if (section) {
+        results.push({ subjectId: section.subjectId, answers });
+      }
+    }
   }
 
-  // Try format 3: mixed compressed across sections at end
-  // Pattern: "TÜRKÇE TESTİ\n\n1.B\n2.A..." or "1.B1.D1.A1.E2.A2.E..."
-  const lastPart = content.slice(-5000);
+  return results;
+}
+
+/**
+ * Parse flat format: section headers listed first, then all answers as single letters
+ * Common in 2018-2023 files
+ */
+function parseFlatAnswers(lines, headers, examType) {
+  const sections = examType === 'TYT' ? TYT_SECTIONS : AYT_SECTIONS;
+
+  // Collect all single letters after the first header
+  const startLine = headers[0].line;
   const allAnswers = [];
-  const matches = lastPart.match(/[A-E]/g);
-  if (matches && matches.length >= expectedCount) {
-    // Take last expectedCount letters
-    return matches.slice(-expectedCount);
+
+  // First, try to find answers grouped by section headers
+  // Check if answers are between/after section headers
+  const sectionGroups = [];
+  let currentHeader = null;
+  let currentAnswers = [];
+
+  for (let i = startLine; i < lines.length; i++) {
+    const t = lines[i].trim();
+    const section = detectSectionHeader(lines[i]);
+
+    if (section) {
+      if (currentHeader && currentAnswers.length > 0) {
+        sectionGroups.push({ section: currentHeader, answers: [...currentAnswers] });
+      }
+      currentHeader = section;
+      currentAnswers = [];
+      continue;
+    }
+
+    // Skip noise
+    if (/^[ÖÖ]$|^SY$|^M$|^ÖS$|^ÖSY$|^ÖSYM$/i.test(t)) continue;
+    if (/^\d+\.$/.test(t)) continue;
+    if (!t) continue;
+
+    if (/^[A-E]$/.test(t)) {
+      currentAnswers.push(t);
+    }
   }
 
-  return singleLetters.length > 0 ? singleLetters : [];
+  if (currentHeader && currentAnswers.length > 0) {
+    sectionGroups.push({ section: currentHeader, answers: [...currentAnswers] });
+  }
+
+  // If we got good section groups, use them
+  if (sectionGroups.length >= 2) {
+    const results = [];
+    for (const group of sectionGroups) {
+      const section = sections.find(s => s.name === group.section);
+      if (section) {
+        results.push({ subjectId: section.subjectId, answers: group.answers });
+      }
+    }
+    if (results.length > 0) return results;
+  }
+
+  // Fallback: collect all single letters and distribute by section sizes
+  for (let i = startLine; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (/^[A-E]$/.test(t)) allAnswers.push(t);
+  }
+
+  if (allAnswers.length === 0) return [];
+
+  const results = [];
+  let idx = 0;
+  for (const section of sections) {
+    const count = Math.min(section.count, allAnswers.length - idx);
+    if (count <= 0) break;
+    results.push({
+      subjectId: section.subjectId,
+      answers: allAnswers.slice(idx, idx + count),
+    });
+    idx += count;
+  }
+
+  return results;
 }
 
 /**
- * Parse questions from file content
- * Returns array of { number, text, options: {A,B,C,D,E}, sectionName }
+ * Parse compressed format: "1.B1.D1.A1.E2.A2.E..."
+ * Answers are interleaved columns (one per section).
+ * Columns collapse as shorter sections end.
  */
-function parseQuestions(content) {
-  const lines = content.split('\n');
-  const questions = [];
-  let currentQ = null;
-  let currentOption = null;
-  let inAnswerSection = false;
+function parseCompressedAnswers(content, examType) {
+  const sections = examType === 'TYT' ? TYT_SECTIONS : AYT_SECTIONS;
 
-  // Detect answer section start (usually after "TEST BİTTİ" or "CEVAPLARINIZI KONTROL")
-  const answerSectionIdx = content.search(/TEST\s*B[İIi]TT[İIi]|CEVAPLARINIZI\s*KONTROL|SINAVDA UYULACAK/i);
-  const questionContent = answerSectionIdx > 0 ? content.substring(0, answerSectionIdx) : content;
-  const qLines = questionContent.split('\n');
+  // Extract all N.X matches in order
+  const matches = [];
+  const regex = /(\d+)\.\s*\n*([A-E])/g;
+  let m;
+  while ((m = regex.exec(content)) !== null) {
+    matches.push({ num: parseInt(m[1]), letter: m[2] });
+  }
 
-  // Track section (Türkçe, Sosyal, Matematik, Fen)
-  let currentSection = '';
-  let globalQuestionNumber = 0;
-  let sectionQuestionBase = 0;
+  if (matches.length === 0) return [];
 
-  for (let i = 0; i < qLines.length; i++) {
-    const line = qLines[i];
-    const trimmed = line.trim();
+  // For each question number, determine which sections are still active
+  // and map the N-th occurrence to the N-th active section
+  const sectionAnswers = {};
+  for (const s of sections) {
+    sectionAnswers[s.subjectId] = [];
+  }
 
-    // Skip empty lines and ÖSYM markers
-    if (!trimmed || /^(Ö|SY|M|ÖS|ÖSY|ÖSYM|Bu\s*so)$/.test(trimmed)) continue;
-    if (/^(Bu|so|la|ru|hi|te|S|Y|ak|s|ız|ın|M|li|çb|ir|ki|şi|ur|um|ve|ya|ku|ru|lu|ş|ta|ra|fın|da|n|ku|lla)$/.test(trimmed)) continue;
+  const seen = {};  // tracks occurrence count per question number
 
-    // Detect section headers
-    if (/T[ÜU]RK[ÇC]E\s*TEST[İIi]/i.test(trimmed)) {
-      currentSection = 'Türkçe';
-      sectionQuestionBase = 0;
-      continue;
-    }
-    if (/SOSYAL\s*B[İIi]L[İIi]MLER\s*TEST[İIi]/i.test(trimmed)) {
-      currentSection = 'Sosyal Bilimler';
-      if (globalQuestionNumber <= 40) sectionQuestionBase = 40;
-      continue;
-    }
-    if (/TEMEL\s*MATEMAT[İIi]K\s*TEST[İIi]/i.test(trimmed)) {
-      currentSection = 'Temel Matematik';
-      sectionQuestionBase = currentSection === 'Temel Matematik' ? 60 : 0; // TYT: after Sosyal (25)
-      continue;
-    }
-    if (/^MATEMAT[İIi]K\s*TEST[İIi]/i.test(trimmed) && !/TEMEL/.test(trimmed)) {
-      currentSection = 'Matematik';
-      continue;
-    }
-    if (/FEN\s*B[İIi]L[İIi]MLER[İIi]\s*TEST[İIi]/i.test(trimmed)) {
-      currentSection = 'Fen Bilimleri';
-      continue;
-    }
+  for (const { num, letter } of matches) {
+    if (!seen[num]) seen[num] = 0;
+    const occurrenceIdx = seen[num];
+    seen[num]++;
 
-    // Skip instruction lines
-    if (/^\d+\.\s*(Bu testte|Cevaplarınızı|Bu test)/.test(trimmed)) continue;
-    if (/^Bu testte/.test(trimmed)) continue;
+    // Determine which sections are active for this question number
+    const activeSections = sections.filter(s => num <= s.count);
 
-    // Detect question start: number followed by period at start of line
-    const qMatch = trimmed.match(/^(\d{1,3})\.\s+(.+)/);
-    if (qMatch) {
-      const qNum = parseInt(qMatch[1]);
-      // Valid question number check
-      if (qNum >= 1 && qNum <= 160) {
-        // Save previous question
-        if (currentQ && currentQ.text.length > 10) {
-          questions.push(currentQ);
-        }
-
-        globalQuestionNumber = qNum + sectionQuestionBase;
-        // For TYT, each section resets to 1
-        // We need to figure out global number based on section
-
-        currentQ = {
-          number: globalQuestionNumber || qNum,
-          localNumber: qNum,
-          text: qMatch[2],
-          options: {},
-          section: currentSection
-        };
-        currentOption = null;
-        continue;
-      }
-    }
-
-    // Detect options: A) B) C) D) E) at start of line
-    const optMatch = trimmed.match(/^([A-E])\)\s*(.*)/);
-    if (optMatch && currentQ) {
-      currentOption = optMatch[1];
-      currentQ.options[currentOption] = optMatch[2];
-      continue;
-    }
-
-    // Continue current option or question text
-    if (currentQ) {
-      if (currentOption && currentQ.options[currentOption] !== undefined) {
-        currentQ.options[currentOption] += ' ' + trimmed;
-      } else {
-        currentQ.text += ' ' + trimmed;
-      }
+    if (occurrenceIdx < activeSections.length) {
+      const targetSection = activeSections[occurrenceIdx];
+      sectionAnswers[targetSection.subjectId].push(letter);
     }
   }
 
-  // Save last question
-  if (currentQ && currentQ.text.length > 10) {
-    questions.push(currentQ);
+  // Build results
+  const results = [];
+  for (const s of sections) {
+    if (sectionAnswers[s.subjectId].length > 0) {
+      results.push({
+        subjectId: s.subjectId,
+        answers: sectionAnswers[s.subjectId],
+      });
+    }
   }
 
-  return questions;
-}
-
-/**
- * Get subject_id for a question based on its global number and exam type
- */
-function getSubjectId(globalNum, examType) {
-  if (examType === 'TYT') {
-    if (globalNum <= 40) return 'tyt-turkce';
-    if (globalNum <= 65) return 'tyt-sosyal';
-    if (globalNum <= 105) return 'tyt-mat';
-    return 'tyt-fen';
-  } else {
-    // AYT: Sos1(1-40), Sos2(41-80), Mat(81-120), Fen(121-160)
-    if (globalNum <= 40) return 'ayt-sosyal1';
-    if (globalNum <= 80) return 'ayt-sosyal2';
-    if (globalNum <= 120) return 'ayt-mat';
-    return 'ayt-fen';
-  }
-}
-
-function getSubjectName(subjectId) {
-  const map = {
-    'tyt-turkce': 'Türkçe',
-    'tyt-sosyal': 'Sosyal Bilimler',
-    'tyt-mat': 'Temel Matematik',
-    'tyt-fen': 'Fen Bilimleri',
-    'ayt-sosyal1': 'Sosyal Bilimler-1',
-    'ayt-sosyal2': 'Sosyal Bilimler-2',
-    'ayt-mat': 'Matematik',
-    'ayt-fen': 'Fen Bilimleri',
-  };
-  return map[subjectId] || subjectId;
+  return results;
 }
 
 /**
@@ -257,7 +350,7 @@ function getSubjectName(subjectId) {
 function seedExamQuestions(db) {
   const examDir = '/tmp/yksler';
   if (!fs.existsSync(examDir)) {
-    console.log('YKS sınav dosyaları bulunamadı (/tmp/yksler)');
+    console.log('YKS sinav dosyalari bulunamadi (/tmp/yksler)');
     return 0;
   }
 
@@ -275,89 +368,52 @@ function seedExamQuestions(db) {
     if (!info) continue;
 
     const filePath = path.join(examDir, filename);
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const buffer = fs.readFileSync(filePath);
+    const content = normalizeContent(buffer);
 
-    const expectedCount = info.type === 'TYT' ? 125 : 160;
-    const answerKey = extractAnswerKey(content, expectedCount);
+    const sectionResults = extractAnswers(content, info.type);
 
-    if (answerKey.length === 0) {
-      console.log(`  ⚠ ${filename}: Cevap anahtarı bulunamadı`);
+    if (sectionResults.length === 0) {
+      console.log(`  ! ${filename}: Cevap anahtari bulunamadi`);
       continue;
     }
 
-    const questions = parseQuestions(content);
-    console.log(`  📄 ${filename}: ${questions.length} soru parse edildi, ${answerKey.length} cevap bulundu`);
-
-    // Match questions with answers
-    // Strategy: use parsed questions where available, create placeholder for missing
     const examName = `${info.year} ${info.type}`;
+    let fileInserted = 0;
 
-    for (let i = 0; i < answerKey.length; i++) {
-      if (!answerKey[i]) continue;
+    // Assign global question numbers
+    let globalNum = 1;
+    const sectionOrder = info.type === 'TYT' ? TYT_SECTIONS : AYT_SECTIONS;
 
-      const globalNum = i + 1;
-      const subjectId = getSubjectId(globalNum, info.type);
-      const id = `yks-${info.type.toLowerCase()}-${info.year}-${globalNum}`;
+    for (const sectionDef of sectionOrder) {
+      const result = sectionResults.find(r => r.subjectId === sectionDef.subjectId);
+      if (result) {
+        for (let i = 0; i < result.answers.length; i++) {
+          const answer = result.answers[i];
+          if (!answer) { globalNum++; continue; }
 
-      // Find matching parsed question
-      let question = questions.find(q => {
-        // Try to match by global number or local section number
-        if (q.number === globalNum) return true;
-        return false;
-      });
+          const id = `yks-${info.type.toLowerCase()}-${info.year}-${globalNum}`;
+          const qText = `${examName} - Soru ${globalNum}`;
+          const difficulty = Math.floor(Math.random() * 3) + 2;
 
-      // If no match found, try by local number + section
-      if (!question) {
-        const sectionName = getSubjectName(subjectId);
-        question = questions.find(q => {
-          if (q.section && q.section.includes(sectionName.split(' ')[0]) && q.localNumber === getLocalNumber(globalNum, info.type)) return true;
-          return false;
-        });
+          insert.run(
+            id, sectionDef.subjectId, null, info.year, info.type, examName, globalNum,
+            qText, '', '', '', '', '',
+            answer, '', difficulty
+          );
+          fileInserted++;
+          globalNum++;
+        }
+      } else {
+        globalNum += sectionDef.count;
       }
-
-      const qText = question ? cleanText(question.text) : `${examName} - Soru ${globalNum}`;
-      const optA = question?.options?.A ? cleanText(question.options.A) : '';
-      const optB = question?.options?.B ? cleanText(question.options.B) : '';
-      const optC = question?.options?.C ? cleanText(question.options.C) : '';
-      const optD = question?.options?.D ? cleanText(question.options.D) : '';
-      const optE = question?.options?.E ? cleanText(question.options.E) : '';
-
-      const difficulty = Math.floor(Math.random() * 3) + 2; // 2-4
-
-      insert.run(
-        id, subjectId, null, info.year, info.type, examName, globalNum,
-        qText, optA, optB, optC, optD, optE,
-        answerKey[i], '', difficulty
-      );
-      totalInserted++;
     }
+
+    totalInserted += fileInserted;
+    console.log(`  ${filename}: ${fileInserted} cevap yuklendi`);
   }
 
   return totalInserted;
-}
-
-function getLocalNumber(globalNum, examType) {
-  if (examType === 'TYT') {
-    if (globalNum <= 40) return globalNum;
-    if (globalNum <= 65) return globalNum - 40;
-    if (globalNum <= 105) return globalNum - 65;
-    return globalNum - 105;
-  } else {
-    if (globalNum <= 40) return globalNum;
-    if (globalNum <= 80) return globalNum - 40;
-    if (globalNum <= 120) return globalNum - 80;
-    return globalNum - 120;
-  }
-}
-
-function cleanText(text) {
-  if (!text) return '';
-  return text
-    .replace(/\s+/g, ' ')
-    .replace(/SY\s*M/g, '')
-    .replace(/Ö\s*SY\s*M/g, '')
-    .replace(/^\s+|\s+$/g, '')
-    .trim();
 }
 
 module.exports = seedExamQuestions;
