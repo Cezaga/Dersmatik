@@ -198,21 +198,32 @@ export default function QuestionsPage() {
       )}
 
       {tab === 'exam' && (
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold">YKS Sınav Arşivi</h2>
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">YKS Sınav Arşivi (2018-2025)</h2>
           {availableExams.length === 0 && <p className="text-dark-400 text-sm">Henüz sınav verisi yok.</p>}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {availableExams.map((exam, i) => (
-              <button key={i} onClick={() => startExam(exam.exam_year, exam.exam_type)}
-                className="bg-dark-800 rounded-xl p-4 border border-dark-700 hover:border-primary-500/50 transition text-left flex items-center justify-between overflow-hidden">
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold truncate">{exam.exam_name}</div>
-                  <div className="text-sm text-dark-400">{exam.question_count} soru • {exam.exam_type === 'TYT' ? '165' : '180'} dk</div>
-                </div>
-                <Play size={20} className="text-primary-400 shrink-0 ml-2" />
-              </button>
-            ))}
-          </div>
+          {/* Yıllara göre grupla */}
+          {[...new Set(availableExams.map(e => e.exam_year))].sort((a, b) => b - a).map(year => (
+            <div key={year} className="space-y-2">
+              <h3 className="text-sm font-bold text-dark-300">{year} YKS</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {availableExams.filter(e => e.exam_year === year).map((exam, i) => (
+                  <button key={i} onClick={() => startExam(exam.exam_year, exam.exam_type)}
+                    className="bg-dark-800 rounded-xl p-4 border border-dark-700 hover:border-primary-500/50 transition text-left flex items-center justify-between overflow-hidden">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold truncate">
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs mr-2 ${exam.exam_type === 'TYT' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
+                          {exam.exam_type}
+                        </span>
+                        {exam.exam_type} {exam.exam_year}
+                      </div>
+                      <div className="text-sm text-dark-400 mt-1">{exam.question_count} soru • {exam.exam_type === 'TYT' ? '165' : '180'} dk</div>
+                    </div>
+                    <Play size={20} className="text-primary-400 shrink-0 ml-2" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

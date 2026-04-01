@@ -7,14 +7,15 @@ const router = express.Router();
 // Profil güncelle
 router.put('/profile', auth, (req, res) => {
   try {
-    const { displayName, avatar, bio, targetRank, targetDepartment, dailyGoalMinutes, dailyGoalQuestions } = req.body;
+    const { displayName, avatar, bio, targetRank, targetDepartment, dailyGoalMinutes, dailyGoalQuestions, obp } = req.body;
     db.prepare(`UPDATE users SET display_name = COALESCE(?, display_name), avatar = COALESCE(?, avatar),
       bio = COALESCE(?, bio), target_rank = COALESCE(?, target_rank), target_department = COALESCE(?, target_department),
       daily_goal_minutes = COALESCE(?, daily_goal_minutes), daily_goal_questions = COALESCE(?, daily_goal_questions),
+      obp = COALESCE(?, obp),
       updated_at = datetime('now') WHERE id = ?`)
-      .run(displayName, avatar, bio, targetRank, targetDepartment, dailyGoalMinutes, dailyGoalQuestions, req.userId);
+      .run(displayName, avatar, bio, targetRank, targetDepartment, dailyGoalMinutes, dailyGoalQuestions, obp, req.userId);
 
-    const user = db.prepare('SELECT id, username, email, display_name, avatar, bio, level, xp, total_xp, streak_days, target_rank, target_department, daily_goal_minutes, daily_goal_questions FROM users WHERE id = ?').get(req.userId);
+    const user = db.prepare('SELECT id, username, email, display_name, avatar, bio, level, xp, total_xp, streak_days, target_rank, target_department, daily_goal_minutes, daily_goal_questions, obp FROM users WHERE id = ?').get(req.userId);
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: 'Profil güncellenirken hata oluştu' });

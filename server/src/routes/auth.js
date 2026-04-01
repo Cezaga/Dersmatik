@@ -56,7 +56,7 @@ router.post('/login', (req, res) => {
 // Mevcut kullanıcı
 router.get('/me', auth, (req, res) => {
   try {
-    const user = db.prepare('SELECT id, username, email, display_name, avatar, level, xp, total_xp, streak_days, last_study_date, target_rank, target_department, daily_goal_minutes, daily_goal_questions, mood, created_at FROM users WHERE id = ?').get(req.userId);
+    const user = db.prepare('SELECT id, username, email, display_name, avatar, level, xp, total_xp, streak_days, last_study_date, target_rank, target_department, daily_goal_minutes, daily_goal_questions, mood, obp, created_at FROM users WHERE id = ?').get(req.userId);
     if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
     res.json(user);
   } catch (err) {
