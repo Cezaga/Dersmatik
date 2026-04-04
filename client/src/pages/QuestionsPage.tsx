@@ -200,30 +200,71 @@ export default function QuestionsPage() {
       {tab === 'exam' && (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">YKS Sınav Arşivi (2018-2025)</h2>
-          {availableExams.length === 0 && <p className="text-dark-400 text-sm">Henüz sınav verisi yok.</p>}
-          {/* Yıllara göre grupla */}
-          {[...new Set(availableExams.map(e => e.exam_year))].sort((a, b) => b - a).map(year => (
-            <div key={year} className="space-y-2">
-              <h3 className="text-sm font-bold text-dark-300">{year} YKS</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {availableExams.filter(e => e.exam_year === year).map((exam, i) => (
-                  <button key={i} onClick={() => startExam(exam.exam_year, exam.exam_type)}
-                    className="bg-dark-800 rounded-xl p-4 border border-dark-700 hover:border-primary-500/50 transition text-left flex items-center justify-between overflow-hidden">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold truncate">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs mr-2 ${exam.exam_type === 'TYT' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
-                          {exam.exam_type}
-                        </span>
-                        {exam.exam_type} {exam.exam_year}
-                      </div>
-                      <div className="text-sm text-dark-400 mt-1">{exam.question_count} soru • {exam.exam_type === 'TYT' ? '165' : '180'} dk</div>
-                    </div>
-                    <Play size={20} className="text-primary-400 shrink-0 ml-2" />
-                  </button>
-                ))}
+          {/* Tüm yılları listele, veri olmayanları "yakında" göster */}
+          {[2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018].map(year => {
+            const yearExams = availableExams.filter(e => e.exam_year === year);
+            const isComingSoon = year === 2023;
+            return (
+              <div key={year} className="space-y-2">
+                <h3 className="text-sm font-bold text-dark-300">{year} YKS</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {isComingSoon ? (
+                    <>
+                      {(['TYT', 'AYT'] as const).map(type => (
+                        <div key={type}
+                          className="bg-dark-800 rounded-xl p-4 border border-dark-700 opacity-60 text-left flex items-center justify-between overflow-hidden cursor-not-allowed">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold truncate">
+                              <span className={`inline-block px-2 py-0.5 rounded text-xs mr-2 ${type === 'TYT' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
+                                {type}
+                              </span>
+                              {type} {year}
+                            </div>
+                            <div className="text-sm text-yellow-400/70 mt-1">Yakında eklenecek</div>
+                          </div>
+                          <Clock size={20} className="text-dark-500 shrink-0 ml-2" />
+                        </div>
+                      ))}
+                    </>
+                  ) : yearExams.length > 0 ? (
+                    yearExams.map((exam, i) => (
+                      <button key={i} onClick={() => startExam(exam.exam_year, exam.exam_type)}
+                        className="bg-dark-800 rounded-xl p-4 border border-dark-700 hover:border-primary-500/50 transition text-left flex items-center justify-between overflow-hidden">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold truncate">
+                            <span className={`inline-block px-2 py-0.5 rounded text-xs mr-2 ${exam.exam_type === 'TYT' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
+                              {exam.exam_type}
+                            </span>
+                            {exam.exam_type} {exam.exam_year}
+                          </div>
+                          <div className="text-sm text-dark-400 mt-1">{exam.question_count} soru • {exam.exam_type === 'TYT' ? '165' : '180'} dk</div>
+                        </div>
+                        <Play size={20} className="text-primary-400 shrink-0 ml-2" />
+                      </button>
+                    ))
+                  ) : (
+                    <>
+                      {(['TYT', 'AYT'] as const).map(type => (
+                        <div key={type}
+                          className="bg-dark-800 rounded-xl p-4 border border-dark-700 opacity-40 text-left flex items-center justify-between overflow-hidden cursor-not-allowed">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold truncate">
+                              <span className={`inline-block px-2 py-0.5 rounded text-xs mr-2 ${type === 'TYT' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
+                                {type}
+                              </span>
+                              {type} {year}
+                            </div>
+                            <div className="text-sm text-dark-500 mt-1">Veri yükleniyor...</div>
+                          </div>
+                          <Clock size={20} className="text-dark-600 shrink-0 ml-2" />
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

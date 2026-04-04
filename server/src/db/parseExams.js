@@ -90,8 +90,10 @@ function detectSectionHeader(line) {
  */
 function extractAnswers(content, examType) {
   const lines = content.split('\n');
+  const sections = examType === 'TYT' ? TYT_SECTIONS : AYT_SECTIONS;
+  const expectedTotal = sections.reduce((s, sec) => s + sec.count, 0);
 
-  // Find the answer key section: look for the last cluster of section headers
+  // Strategy 1: Try sectioned format first (AYT 2024+ with "N.  X" per section)
   const headerPositions = [];
   for (let i = 0; i < lines.length; i++) {
     const section = detectSectionHeader(lines[i]);
@@ -100,57 +102,83 @@ function extractAnswers(content, examType) {
     }
   }
 
-  if (headerPositions.length === 0) {
-    console.log('    No section headers found');
-    return [];
-  }
+  if (headerPositions.length >= 2) {
+    // Find last cluster of headers
+    let clusterStart = headerPositions.length - 1;
+    for (let i = headerPositions.length - 2; i >= 0; i--) {
+      if (headerPositions[clusterStart].line - headerPositions[i].line < 350) {
+        clusterStart = i;
+      } else {
+        break;
+      }
+    }
+    const answerHeaders = headerPositions.slice(clusterStart);
 
-  // Find last cluster of headers (within ~150 lines of each other, answers between them)
-  let clusterStart = headerPositions.length - 1;
-  for (let i = headerPositions.length - 2; i >= 0; i--) {
-    if (headerPositions[clusterStart].line - headerPositions[i].line < 350) {
-      clusterStart = i;
-    } else {
-      break;
+    // Check if there are actual answers between section headers
+    if (checkAnswersBetweenHeaders(lines, answerHeaders)) {
+      const result = parseSectionedAnswers(lines, answerHeaders, examType);
+      const totalFound = result.reduce((s, r) => s + r.answers.length, 0);
+      if (totalFound >= expectedTotal * 0.8) return result;
+    }
+
+    // Check for compressed format (TYT 2024+)
+    const answerContent = lines.slice(answerHeaders[0].line).join('\n');
+    const numberedPatterns = answerContent.match(/^\d+\.$/gm);
+    if (numberedPatterns && numberedPatterns.length > 30) {
+      const result = parseCompressedAnswers(answerContent, examType);
+      const totalFound = result.reduce((s, r) => s + r.answers.length, 0);
+      if (totalFound >= expectedTotal * 0.8) return result;
     }
   }
 
-  const answerHeaders = headerPositions.slice(clusterStart);
-  const answerStartLine = answerHeaders[0].line;
-
-  // Get the content after the answer section start
-  const answerContent = lines.slice(answerStartLine).join('\n');
-
-  // Check for compressed format (TYT 2024+): "1.B" patterns mixed together
-  // Detect: if we find "N.X" without a clear section structure between headers
-  const compressedMatches = answerContent.match(/\d+\.\s*\n*[A-E]/g);
-  const singleLetterMatches = answerContent.match(/^[A-E]$/gm);
-
-  // If we have both section headers with answers between them, use sectioned parsing
-  // If answers are all in one block after headers, use compressed parsing
-  const hasAnswersBetweenHeaders = answerHeaders.length >= 2 &&
-    checkAnswersBetweenHeaders(lines, answerHeaders);
-
-  if (hasAnswersBetweenHeaders) {
-    return parseSectionedAnswers(lines, answerHeaders, examType);
+  // Strategy 2: Flat extraction - collect ALL single letters from the last ~40% of file
+  // PDF answer keys always appear at the end of the document
+  const startLine = Math.floor(lines.length * 0.6);
+  const allLetters = [];
+  for (let i = startLine; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (/^[A-E]$/.test(t)) allLetters.push(t);
   }
 
-  // Detect compressed format: "N." followed by letter (with optional newline between)
-  // In compressed format, there are many "N.\n[letter]" patterns (number on its own line)
-  const numberedPatterns = answerContent.match(/^\d+\.$/gm);
-  const hasCompressedFormat = numberedPatterns && numberedPatterns.length > 30;
-
-  if (hasCompressedFormat) {
-    return parseCompressedAnswers(answerContent, examType);
+  if (allLetters.length >= expectedTotal * 0.9) {
+    // Distribute by known section sizes
+    const results = [];
+    let idx = 0;
+    for (const section of sections) {
+      const count = Math.min(section.count, allLetters.length - idx);
+      if (count <= 0) break;
+      results.push({
+        subjectId: section.subjectId,
+        answers: allLetters.slice(idx, idx + count),
+      });
+      idx += count;
+    }
+    return results;
   }
 
-  // Flat single-letter format (older files with section headers then letters)
-  if (singleLetterMatches && singleLetterMatches.length > 50) {
-    return parseFlatAnswers(lines, answerHeaders, examType);
+  // Strategy 3: Try with N.X numbered patterns in the last part
+  const tailContent = lines.slice(startLine).join('\n');
+  const numberedMatches = tailContent.match(/(\d+)\.\s+([A-E])/g);
+  if (numberedMatches && numberedMatches.length >= expectedTotal * 0.8) {
+    const answers = numberedMatches.map(m => {
+      const parsed = m.match(/\d+\.\s+([A-E])/);
+      return parsed[1];
+    });
+    const results = [];
+    let idx = 0;
+    for (const section of sections) {
+      const count = Math.min(section.count, answers.length - idx);
+      if (count <= 0) break;
+      results.push({
+        subjectId: section.subjectId,
+        answers: answers.slice(idx, idx + count),
+      });
+      idx += count;
+    }
+    return results;
   }
 
-  // Try compressed as fallback
-  return parseCompressedAnswers(answerContent, examType);
+  return [];
 }
 
 /**

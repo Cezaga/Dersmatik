@@ -281,10 +281,14 @@ function seed(db) {
   console.log(`Seed data yuklendi! ${subjects.length} ders, ${Object.values(topicsData).flat().length} konu, ${badges.length} rozet, ${sampleQuestions.length} soru, ${formulas.length + extraFormulas.length} formul, ${flashcardDecks.length} hazir deste`);
 
   // YKS arşiv sınavlarını yükle
-  const seedExamQuestions = require('./parseExams');
-  const examCount = seedExamQuestions(db);
-  if (examCount > 0) {
-    console.log(`YKS arsiv sinav verileri yuklendi! ${examCount} soru eklendi`);
+  try {
+    const seedExamQuestions = require('./parseExams');
+    const examCount = seedExamQuestions(db);
+    if (examCount > 0) {
+      console.log(`YKS arsiv sinav verileri yuklendi! ${examCount} soru eklendi`);
+    }
+  } catch (err) {
+    console.error('YKS arsiv parse hatasi:', err.message);
   }
 }
 
